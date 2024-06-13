@@ -1,14 +1,47 @@
+(defmodule MAIN (export ?ALL))
+
+(defglobal
+    ?*num-players* = 0
+    ?*cards-per-player* = 0
+    )
+
 (deftemplate player
     (slot name)
-    (multislot hand))
+    (multislot hand)
+    )
 
 (deftemplate command
-    (slot player_name)
-    (multislot action))
+    (slot player-name)
+    (multislot action)
+    )
 
-(defrule bad_command
-    (declare (salience -10000))
-    ?c <- (command)
+(deftemplate available-action
+    (slot player-name)
+    (multislot action)
+    )
+
+(deftemplate card
+    (slot color (allowed-values green white blue yellow red))
+    (slot number (allowed-values 0 1 2 3 4 5))
+    )
+
+(deftemplate piles
+    (multislot pile)
+    )
+
+(deftemplate discard
+    (multislot cards)
+    )
+
+(deftemplate deck
+    (multislot cards)
+    )
+
+(deftemplate internal-action
+    (multislot action)
+    )
+
+(defrule start
     =>
-    (println "Bad command.")
-    (retract ?c))
+    (focus INITIAL COMMAND)
+    )
