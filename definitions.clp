@@ -57,3 +57,9 @@
     =>
     (focus INITIAL CORE COMMAND)
     )
+
+(defrule new-command-available
+    (command)
+    =>
+    (focus COMMAND)
+    )

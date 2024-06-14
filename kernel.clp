@@ -63,7 +63,6 @@
 (defmodule COMMAND (import MAIN ?ALL))
 
 (defrule bad-command
-    (declare (salience -10000))
     ?c <- (command (player-name ?pn) (action $?ac))
     (not (available-command (player-name ?pn) (action $?ac)))
     =>
