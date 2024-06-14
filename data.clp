@@ -21,3 +21,7 @@
 (deffacts hints-remaining
     (hints-remaining 8)
     )
+
+(deffacts starting-score
+    (game-score 0)
+    )

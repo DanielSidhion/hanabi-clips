@@ -7,7 +7,19 @@
 
 (deftemplate player
     (slot name)
-    (multislot hand)
+    )
+
+(deftemplate hand-card
+    (slot player-name)
+    (slot index)
+    (slot card)
+    )
+
+(deftemplate card-hints
+    (slot player-name)
+    (slot index)
+    (multislot color)
+    (multislot number)
     )
 
 (deftemplate command
@@ -15,7 +27,7 @@
     (multislot action)
     )
 
-(deftemplate available-action
+(deftemplate available-command
     (slot player-name)
     (multislot action)
     )
@@ -43,5 +55,5 @@
 
 (defrule start
     =>
-    (focus INITIAL COMMAND)
+    (focus INITIAL CORE COMMAND)
     )
