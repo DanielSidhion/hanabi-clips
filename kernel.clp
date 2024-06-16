@@ -1,5 +1,87 @@
 (defmodule CORE (import MAIN ?ALL) (export ?ALL))
 
+(defrule coalesce-identical-effects
+    ; This must run before the rule that sends ordered effects.
+    (declare (salience -9999))
+    (game-effect (sequence ?seq1) (players $?players) (type ?type) (data $?data))
+    ?subsequent-effect <- (game-effect (sequence ?seq2) (players $?players) (type ?type) (data $?data))
+    (test
+        (or
+            (and
+                ; ?seq1 is smaller than ?seq2.
+                (= (str-compare ?seq1 ?seq2) -1)
+                (= (str-length ?seq1) (str-length ?seq2))
+                )
+            ; ?seq1 is smaller than ?seq2.
+            (< (str-length ?seq1) (str-length ?seq2))
+            )
+        )
+    =>
+    ; Since ?seq1 is smaller, we'll keep it and retract the effect with higher sequence.
+    (retract ?subsequent-effect)
+    )
+
+(defrule send-effect-ordered
+    (declare (salience -10000))
+    ?effect <- (game-effect (sequence ?seq))
+    (not
+        (and
+            (game-effect (sequence ?other-seq))
+            (or
+                (and
+                    ; ?other-seq is smaller than ?seq. This would invalidate the ordering.
+                    (test (= (str-compare ?seq ?other-seq) 1))
+                    ; Necessary for the str-compare to hold.
+                    (test (= (str-length ?seq) (str-length ?other-seq)))
+                    )
+                ; ?other-seq is smaller than ?seq. This would invalidate the ordering.
+                (test (> (str-length ?seq) (str-length ?other-seq)))
+                )
+            )
+        )
+    =>
+    (ppfact ?effect ?*game-effects-router*)
+    (retract ?effect)
+    )
+
+(defrule effect-when-deck-size-changes
+    (deck (cards $?cards))
+    =>
+    (assert (game-effect (players ALL) (type DECK-SIZE) (data (length$ ?cards))))
+    )
+
+(defrule effect-when-lives-changes
+    (lives-remaining ?lives)
+    =>
+    (assert (game-effect (players ALL) (type UPDATE-LIVES) (data ?lives)))
+    )
+
+(defrule effect-when-hints-changes
+    (hints-remaining ?hints)
+    =>
+    (assert (game-effect (players ALL) (type UPDATE-HINTS) (data ?hints)))
+    )
+
+(defrule effect-when-card-color-hint-changes
+    (card-hints (player-name ?pn) (index ?index) (color $?color-hints&:(> (length$ $?color-hints) 0)))
+    =>
+    (assert (game-effect (players ALL) (type UPDATE-CARD-HINTS) (data ?pn ?index color ?color-hints)))
+    )
+
+(defrule effect-when-card-number-hint-changes
+    (card-hints (player-name ?pn) (index ?index) (number $?number-hints&:(> (length$ $?number-hints) 0)))
+    =>
+    (assert (game-effect (players ALL) (type UPDATE-CARD-HINTS) (data ?pn ?index number ?number-hints)))
+    )
+
+(defrule effect-when-turn-changes
+    ; Assumption is that all other effects should be generated first, because they're consequence of the action of the player who just had their turn. We only show the next turn's player after those effects are done.
+    (declare (salience -1))
+    (current-turn ?pn)
+    =>
+    (assert (game-effect (players ALL) (type SET-TURN) (data ?pn)))
+    )
+
 (defrule game-score
     ; Just so the score updates before game is declared won or over.
     (declare (salience 1))
@@ -13,6 +95,7 @@
         (bind ?curr-score (+ ?curr-score (fact-slot-value ?card number)))
         )
     (assert (game-score ?curr-score))
+    (assert (game-effect (players ALL) (type UPDATE-SCORE) (data ?curr-score)))
     )
 
 (defrule game-won
@@ -28,7 +111,7 @@
     (test (member$ ?yellow $?pile-cards))
     (test (member$ ?red $?pile-cards))
     =>
-    (println "GAME WON")
+    (assert (game-effect (players ALL) (type GAME-RESULT) (data WIN)))
     )
 
 (defrule game-over
@@ -40,7 +123,7 @@
             )
         )
     =>
-    (println "GAME OVER")
+    (assert (game-effect (players ALL) (type GAME-RESULT) (data LOSS)))
     )
 
 (deffunction go-to-next-player ()
@@ -87,8 +170,12 @@
     (not (command (action $?)))
     =>
     ; Asserting the same fact multiple times doesn't matter, so we'll do this for all cards in other players' hands.
-    (assert (available-command (player-name ?pn) (action give-hint ?on color (fact-slot-value ?card color))))
-    (assert (available-command (player-name ?pn) (action give-hint ?on number (fact-slot-value ?card number))))
+    (bind ?give-hint-color-data (create$ give-hint ?on color (fact-slot-value ?card color)))
+    (assert (available-command (player-name ?pn) (action ?give-hint-color-data)))
+    (assert (game-effect (players ?pn) (type AVAILABLE-ACTION) (data ?give-hint-color-data)))
+    (bind ?give-hint-number-data (create$ give-hint ?on number (fact-slot-value ?card number)))
+    (assert (available-command (player-name ?pn) (action ?give-hint-number-data)))
+    (assert (game-effect (players ?pn) (type AVAILABLE-ACTION) (data ?give-hint-number-data)))
     )
 
 (defrule available-command-give-play-or-discard
@@ -98,7 +185,9 @@
     =>
     (assert
         (available-command (player-name ?pn) (action play ?card-index))
+        (game-effect (players ?pn) (type AVAILABLE-ACTION) (data play ?card-index))
         (available-command (player-name ?pn) (action discard ?card-index))
+        (game-effect (players ?pn) (type AVAILABLE-ACTION) (data discard ?card-index))
         )
     )
 
@@ -144,7 +233,8 @@
     =>
     (loop-for-count (?card-index ?*cards-per-player*)
         (bind ?curr-card (nth$ ?card-index ?deck))
-        (assert (hand-card (player-name ?pn) (index ?card-index) (card ?curr-card)))
+        (deal-card ?pn ?card-index ?curr-card)
+        ; (assert (hand-card (player-name ?pn) (index ?card-index) (card ?curr-card)))
         (assert (card-hints (player-name ?pn) (index ?card-index)))
         )
     (modify ?d (cards (delete$ ?deck 1 ?*cards-per-player*)))

@@ -11,6 +11,8 @@
     =>
     (retract ?cmd ?hc ?hint)
     (modify ?pile (pile (create$ ?pile-before ?card ?pile-after)))
+    (assert (game-effect (players ALL) (type PLAY-CARD) (data ?pn ?card-index SUCCESS)))
+    (assert (game-effect (players ALL) (type UPDATE-PILE) (data ?color ?number)))
 
     (assert (internal-action (action shift-cards-and-deal ?pn ?card-index)))
     (go-to-next-player)
@@ -27,6 +29,9 @@
     (retract ?cmd ?hc ?lr)
     (assert (lives-remaining (- ?num-lives 1)))
 
+    (assert (game-effect (players ALL) (type PLAY-CARD) (data ?pn ?card-index FAIL)))
+    (assert (game-effect (players ALL) (type UPDATE-DISCARD) (data ?color ?number)))
+
     (assert (internal-action (action shift-cards-and-deal ?pn ?card-index)))
     (modify ?discard (cards (create$ ?discard-cards ?card)))
     (go-to-next-player)
@@ -41,6 +46,10 @@
     ?hr <- (hints-remaining ?num-hints)
     =>
     (retract ?cmd ?hc ?hint ?hr)
+
+    (assert (game-effect (players ALL) (type DISCARD-CARD) (data ?pn ?card-index)))
+    (assert (game-effect (players ALL) (type UPDATE-DISCARD) (data ?color ?number)))
+
     (modify ?discard (cards (create$ ?discard-cards ?card)))
     (assert
         (internal-action (action shift-cards-and-deal ?pn ?card-index))
@@ -67,16 +76,20 @@
         )
     
     (assert
-        (hand-card (player-name ?pn) (index ?*cards-per-player*) (card ?next-card))
+        (deal-card ?pn ?*cards-per-player* ?next-card)
+        ; (hand-card (player-name ?pn) (index ?*cards-per-player*) (card ?next-card))
         (card-hints (player-name ?pn) (index ?*cards-per-player*))
         )
     )
 
 (defrule hint-given
-    ?cmd <- (command (action give-hint ?pn ?hint-type ?hint-value))
+    ?cmd <- (command (player-name ?issuing-pn) (action give-hint ?pn ?hint-type ?hint-value))
     ?hr <- (hints-remaining ?num-hints&:(> ?num-hints 0))
     =>
     (retract ?cmd ?hr)
+
+    (assert (game-effect (players ALL) (type HINT) (data ?issuing-pn ?pn ?hint-type ?hint-value)))
+
     (assert (hints-remaining (- ?num-hints 1)))
     (assert (internal-action (action add-hint ?pn ?hint-type ?hint-value)))
     (go-to-next-player)

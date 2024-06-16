@@ -3,10 +3,12 @@
 (defglobal
     ?*num-players* = 0
     ?*cards-per-player* = 0
+    ; This should be set by the wrapper software to a different value before running, so it can properly observe the effects without any other output messing with it.
+    ?*game-effects-router* = stdout
     )
 
 (deftemplate player
-    (slot name)
+    (slot name (type STRING))
     )
 
 (deftemplate hand-card
@@ -53,9 +55,33 @@
     (multislot action)
     )
 
+(deftemplate game-effect
+    ; Which player(s) to route this effect to.
+    (multislot players (type LEXEME) (allowed-symbols ALL) (default ALL))
+    (slot type (type SYMBOL) (allowed-values UPDATE-SCORE DEAL-CARD PLAY-CARD DISCARD-CARD HINT UPDATE-CARD-HINTS GAME-RESULT SET-TURN AVAILABLE-ACTION DECK-SIZE UPDATE-PILE UPDATE-DISCARD UPDATE-LIVES UPDATE-HINTS) (default ?NONE))
+    (slot sequence (type SYMBOL) (default-dynamic (gensym*)))
+    (multislot data)
+    )
+
+(deffunction deal-card (?player-name ?card-index ?card-fact)
+    (assert (hand-card (player-name ?player-name) (index ?card-index) (card ?card-fact)))
+    (assert (game-effect (players ?player-name) (type DEAL-CARD) (data ?player-name ?card-index nil)))
+    (do-for-all-facts ((?player player))
+        (neq ?player:name ?player-name)
+        ; Only other players can see the card a player was given.
+        (assert (game-effect (players ?player:name) (type DEAL-CARD) (data ?player-name ?card-index ?card-fact)))
+        )
+    )
+
 (defrule start
     =>
     (focus INITIAL CORE COMMAND)
+    )
+
+(defrule effects-are-available
+    (game-effect)
+    =>
+    (focus CORE)
     )
 
 (defrule new-command-available
