@@ -1,7 +1,6 @@
 (defmodule GAME (import MAIN ?ALL) (import CORE ?ALL))
 
 (defrule played-card-matches-pile
-    (declare (salience 1))
     ?cmd <- (command (player-name ?pn) (action play ?card-index))
     ?card <- (card (color ?color) (number ?number))
     ?hc <- (hand-card (player-name ?pn) (index ?card-index) (card ?card))
@@ -23,6 +22,8 @@
     ?card <- (card (color ?color) (number ?number))
     ?hc <- (hand-card (player-name ?pn) (index ?card-index) (card ?card))
     ?hint <- (card-hints (player-name ?pn) (index ?card-index))
+    ?prev-card <- (card (color ?color) (number =(- ?number 1)))
+    (not (piles (pile $? ?prev-card $?)))
     ?discard <- (discard (cards $?discard-cards))
     ?lr <- (lives-remaining ?num-lives)
     =>
